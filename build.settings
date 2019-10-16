@@ -1,22 +1,57 @@
--- Supported values for orientation:
--- portrait, portraitUpsideDown, landscapeLeft, landscapeRight
+--
+-- For more information on build.settings, see the Project Build Settings guide at:
+-- https://docs.coronalabs.com/guide/distribution/buildSettings
+--
 
-settings = {
-	
-	orientation = {
+settings =
+{
+	orientation =
+	{
+		-- Supported values for orientation:
+		-- portrait, portraitUpsideDown, landscapeLeft, landscapeRight
 		default = "portrait",
-		supported = { "portrait", }
+		supported = { "portrait", },
 	},
-	
-	iphone = {
-		plist = {
+
+	--
+	-- Android section
+	--
+	android =
+	{
+		usesPermissions =
+		{
+			"android.permission.INTERNET",
+		},
+	},
+
+	--
+	-- iOS section
+	--
+	iphone =
+	{
+		xcassets = "Images.xcassets",
+		plist =
+		{
 			UIStatusBarHidden = false,
-			UIPrerenderedIcon = true, -- set to false for "shine" overlay
-			UIApplicationExitsOnSuspend = true,
-		}
+			UILaunchStoryboardName = "LaunchScreen",
+		},
 	},
-	
-	androidPermissions = {
-  		"android.permission.INTERNET",
-  	},
+
+	--
+	-- Plugins section
+	--
+	plugins =
+	{
+
+	},
+
+	--
+	-- Project section
+	--
+	excludeFiles =
+	{
+		-- Exclude unnecessary files for each platform
+		all = { "Icon.png", "Icon-*dpi.png", "Images.xcassets", },
+		android = { "LaunchScreen.storyboardc", },
+	},
 }
