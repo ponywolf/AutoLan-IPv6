@@ -22,19 +22,18 @@ We are constantly developing this software to provide you with a better developm
 
 local socket = require "socket"
 local json = require "json"
-local multiplayer = {}
-local applicationName = "Default"
+local applicationName = "Default" --system.getInfo( "appName" )
 
 local client = {} --master object
 
 ----------------
 --common client/server --takes care of the send queue/priority system
 local circularBufferSize = 100
-local bufferIndexLow = 1
-local bufferIndexLowSend = 1 --last index looked at by send routine
+--local bufferIndexLow = 1
+--local bufferIndexLowSend = 1 --last index looked at by send routine
 local bufferIndexHigh = 1
-local bufferIndexHighSend = 1 --last index looked at by send routine
-local sendQueueLow = {} --will be a circular buffer
+--local bufferIndexHighSend = 1 --last index looked at by send routine
+--local sendQueueLow = {} --will be a circular buffer
 local sendQueueHigh = {} --will be an associative array
 local sendQueueHighCallbacks = {}
 local fileQueue = {}
@@ -42,7 +41,6 @@ local pendingFiles = {}
 local fileQueueNumber = 0
 local packetSize = 2000 ---in bytes
 local myClientID
-local connected = false
 local onUpdate
 local handshake
 
@@ -54,7 +52,6 @@ local handshake
 ------------client code
 local broadcastListener
 local listenTime = 1000
-local scanTime = 30000
 local timers = {}
 local availibleServers = {} --key = ip, value = port
 local serverIP,serverPort
@@ -85,9 +82,6 @@ local rechargeAmount = 10 --if no response by rechargeRate then slowly fill up c
 
 ------internet------------------------------------------------------------------------------------
 local fallBackAddress = "74.125.115.104"
-
--- Check if this is socket 2 or later
-local isSocket2 = (string.match( require("socket")._VERSION, "LuaSocket 2" ) ~= nil )
 
 -- Check if this is socket 2 or later
 local isSocket2 = (string.match( require("socket")._VERSION, "LuaSocket 2" ) ~= nil )
@@ -262,7 +256,7 @@ local function receive()
 				local filename = userMessage[2]
 			
 				if(pendingFiles[filename]==nil) then
-					pendingFile = {}
+					local pendingFile = {}
 					pendingFile.file = io.open(system.pathForFile(userMessage[2],system.DocumentsDirectory),"wb")
 					pendingFile.recieved = {}
 					pendingFile.buffer = {}
@@ -344,7 +338,7 @@ local function mainLoop()
 						--resend packet
 						packet[2][2]  = numMessagesRecieved -- control/acks
 						packet[3] = HighPriorityRecieved --high priority acks						
-						UDPClient:send( json.encode(packetTemplate) ) --send data entry
+						UDPClient:send( json.encode(packet) ) --send data entry
 						sendCredits = sendCredits-1
 					else
 						HighPriorityCounters[i] = count - 1
@@ -377,7 +371,6 @@ local function mainLoop()
 	end
 	heartbeatTimer = heartbeatTimer-1	
 end
-local sendPhase = true 
 
 local function connectToServer()
 	if(timers.failedToConnect == nil) then
@@ -475,8 +468,8 @@ local function UDPBroadcastListen()
 end
 
 local function scanServers(scanTime)
-	if(scanTimer) then
-		----print("already scanning...")
+	if(timers.scanTimer) then
+		print("already scanning...")
 	else
 		if(broadcastListener==nil) then
 			broadcastListener = socketUDP()
@@ -558,7 +551,7 @@ local function MatchmakerServerListen() --listens for a reponse from the matchma
 end
 ------------------------------------------INTERNET----------------------------------------------------
 
-function client:scanServersInternet(scanTime)
+function client:scanServersInternet()
 	scanServers()
 	--open a TCP connection to the matchmaking server
 	matchmakerTCPclient = socketTCP()
@@ -576,13 +569,14 @@ end
 
 
 -------------------------------------------INTERNET----------------------------------------------------
-
-
+local customBroadcast
+local connectTime
+local timeoutTime
 function client:setOptions(params)
 	broadcastTime = params.broadcastTime or broadcastTime
 	customBroadcast = params.customBroadcast or customBroadcast
 	networkRate = params.networkRate or networkRate --feqnuency to run network loop
-	connectTime = params.connectTime or connectTime --frequency to look for new clients
+	connectTime = params.connectTime or  connectTime --frequency to look for new clients
 	timeoutTime = params.timeoutTime or timeoutTime --number of cycles to wait before client is DC
 	maxCredits = params.maxCredits or maxCredits --number of packets to send w/o ACK
 	rechargeRate = params.rechargeRate or rechargeRate --time to recharge credits
@@ -592,7 +586,7 @@ function client:setOptions(params)
 	onUpdate = params.onUpdate or onUpdate
 end
 function client:stop()
-	for i,t in pairs(timers) do
+	for _,t in pairs(timers) do
 		timer.cancel(t)
 		t = nil
 	end
