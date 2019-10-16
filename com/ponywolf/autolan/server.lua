@@ -1,9 +1,16 @@
+-- Project: AutoLan Improvements
+
+-- * Reorganized the codebase removing redundent files and packaging up the client/server files
+-- * Added Pong Demo 4 as base project for easy testing
+-- * Fixed 40+ non-breaking errors in client/server, should pass ZeroBrane's static analyzer
+-- * Reorganized the README.md file
+-- * Removed link to MY Developers as it is a phishing site now :(
+
 --[[
-Corona® AutoLAN v 1.2
+Corona AutoLAN v 1.2
 Author: M.Y. Developers
 Copyright (C) 2011 M.Y. Developers All Rights Reserved
 Support: mydevelopergames@gmail.com
-Website: http://www.mygamedevelopers.com/Corona--Profiler.html
 License: Many hours of genuine hard work have gone into this project and we kindly ask you not to redistribute or illegally sell this package. 
 We are constantly developing this software to provide you with a better development experience and any suggestions are welcome. Thanks for you support.
 
@@ -12,31 +19,44 @@ We are constantly developing this software to provide you with a better developm
 -- OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 -- DEALINGS IN THE SOFTWARE.
 --]]
+
 local socket = require "socket"
+
+-- Check if this is socket 2 or later
+local isSocket2 = (string.match( require("socket")._VERSION, "LuaSocket 2" ) ~= nil )
+
+local forceIPV4 	= true
+
+local socketUDP 	= (isSocket2) and socket.udp or(socket.udp6 or socket.udp4 or socket.udp) 
+local socketTCP 	= (isSocket2) and socket.tcp or(socket.tcp6 or socket.tcp4 or socket.tcp) 
+
+if( forceIPV4 and isSocket2 == false ) then
+	socketUDP 	= socket.udp4 or socket.udp 
+	socketTCP 	= socket.tcp4 or socket.tcp
+end
+
+-- If we are using Socket 3, we still need to determine if the local network is
+-- ipv4 or ipv6 compliant.  Assume it is, but test for failure
 local ipv6Test = true
-local socketTest1 = socket.udp6()
-socketTest1:setpeername( "scottrules44.duckdns.org", 54613 )
-local testPeerIP = socketTest1:getsockname()
-if (testPeerIP == "::") then
-	ipv6Test = false
+if( isSocket2 == false ) then
+	local socketTest1 = socket.udp6()
+	socketTest1:setpeername( "google.com", 54613 )
+	local testPeerIP = socketTest1:getsockname()
+	if (testPeerIP == "::") then
+		ipv6Test = false
+	end
 end
-local UDPServer
-if (ipv6Test == true) then
-	UDPServer= socket.udp6()
-else
-	UDPServer= socket.udp4()
-end
+
+local UDPServer = socketUDP()
 UDPServer:setsockname("*", 0) --bind on any availible port and localserver ip address.
+
 local myIP, myPort = UDPServer:getsockname()
-local UDPBroadcaster= socket.udp4()
-if (ipv6Test == true) then
-	UDPBroadcaster= socket.udp6()
-else
-	UDPBroadcaster= socket.udp4()
-end
+
+local UDPBroadcaster = socketUDP()
 UDPBroadcaster:setoption("broadcast", true)
 UDPBroadcaster:setsockname("*", 0) --bind on any availible port and localserver ip address.
 UDPBroadcaster:settimeout(0)
+
 local json = require "json"
 local applicationName = "Default"
 local deviceName = system.getInfo("name") 
@@ -194,12 +214,7 @@ local function connectClients() --checks to see if any new clients wish to conne
 			if(message[1] and message[1]=="CoronaMultiplayer" and message[2]==applicationName) then --this is the protocol id				
 				if(availibleClients[clientIP] == nil) then
 					numClients = numClients+1
-					local UDPClient
-					if (ipv6Test == true) then
-						UDPClient= socket.udp6()
-					else
-						UDPClient= socket.udp4()
-					end
+					local UDPClient = socketUDP()
 					UDPClient:setsockname("*", 0) --bind on any availible port, we cant bind to server port
 					local ip, port = UDPClient:getsockname()
 
@@ -281,12 +296,7 @@ local function connectClients() --checks to see if any new clients wish to conne
 					--here we create a new socket and connect back to the matchmaker
 					if(pendingConnections[decoded[2]..decoded[3]] == nil and availibleClients[decoded[2]..decoded[3]]==nil) then
 						--timer.performWithDelay(2000, networkSend,-1) --need to keep sending to keep the NAT stable
-						local UDPClient
-						if (ipv6Test == true) then
-							UDPClient= socket.udp6()
-						else
-							UDPClient= socket.udp4()
-						end
+						local UDPClient = socketUDP()
 						UDPClient:setsockname("*", 0) --bind on any availible port and localserver ip address.
 						UDPClient:settimeout(0)
 						print("switch to UDP on server",decoded[2], decoded[3],myIP, myPort)
@@ -613,22 +623,12 @@ function server:startInternet()
 		server:start()
 		--establish a TCP connection with the matchmaker server
 		if(peerIP == nil) then
-			local s = socket.udp6()
-    		s:setpeername( "scottrules44.duckdns.org", 54613 )
-    		 peerIP, peerPort = s:getsockname(), 54613
-    		 if (peerIP == "::") then
-    		 	ipv6 = false
-    		 	local s2 = socket.udp4()
-    			s2:setpeername( "scottrules44.duckdns.org", 54613 )
-    		 	peerIP, peerPort = s2:getsockname(), 54613
-    		 end
-			 --peerIP,  peerPort = socket.dns.toip("rijl-al-awwa.dreamhost.com"), 54613
+			local s = socketUDP()
+    		s:setpeername( "google.com", 54613 )
+    		peerIP, peerPort = s:getsockname(), 54613
 		end
-		if (ipv6 == false) then
-			matchmakerTCPclient = socket.tcp4()
-		else
-			matchmakerTCPclient = socket.tcp6()
-		end
+
+		matchmakerTCPclient = socketTCP()
 		matchmakerTCPclient:settimeout(0) --this is the only blocking operation	
 		matchmakerTCPclient:connect(peerIP, peerPort) --bind on any availible port and localserver ip address.
 		timers.connectMatchmaker = timer.performWithDelay(500, server.startInternet,-1)

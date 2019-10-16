@@ -1,9 +1,16 @@
+-- Project: AutoLan Improvements
+
+-- * Reorganized the codebase removing redundent files and packaging up the client/server files
+-- * Added Pong Demo 4 as base project for easy testing
+-- * Fixed 40+ non-breaking errors in client/server, should pass ZeroBrane's static analyzer
+-- * Reorganized the README.md file
+-- * Removed link to MY Developers as it is a phishing site now :(
+
 --[[
-Corona® AutoLAN v 1.2
+Corona AutoLAN v 1.2
 Author: M.Y. Developers
 Copyright (C) 2011 M.Y. Developers All Rights Reserved
 Support: mydevelopergames@gmail.com
-Website: http://www.mygamedevelopers.com/Corona--Profiler.html
 License: Many hours of genuine hard work have gone into this project and we kindly ask you not to redistribute or illegally sell this package. 
 We are constantly developing this software to provide you with a better development experience and any suggestions are welcome. Thanks for you support.
 
@@ -77,9 +84,51 @@ local rechargeRate = 500 --in ms
 local rechargeAmount = 10 --if no response by rechargeRate then slowly fill up credits
 
 ------internet------------------------------------------------------------------------------------
-local s = socket.udp()
-s:setpeername( "74.125.115.104", 80 )
-local peerIP, peerPort = s:getsockname()
+local fallBackAddress = "74.125.115.104"
+
+-- Check if this is socket 2 or later
+local isSocket2 = (string.match( require("socket")._VERSION, "LuaSocket 2" ) ~= nil )
+
+-- Check if this is socket 2 or later
+local isSocket2 = (string.match( require("socket")._VERSION, "LuaSocket 2" ) ~= nil )
+
+local forceIPV4 	= true
+
+local socketUDP 	= (isSocket2) and socket.udp or(socket.udp6 or socket.udp4 or socket.udp) 
+local socketTCP 	= (isSocket2) and socket.tcp or(socket.tcp6 or socket.tcp4 or socket.tcp) 
+
+if( forceIPV4 and isSocket2 == false ) then
+	socketUDP 	= socket.udp4 or socket.udp 
+	socketTCP 	= socket.tcp4 or socket.tcp
+end
+
+-- If we are using Socket 3, we still need to determine if the local network is
+-- ipv4 or ipv6 compliant.  Assume it is, but test for failure
+local ipv6Test = true
+if( isSocket2 == false ) then
+	local socketTest1 = socket.udp6()
+	socketTest1:setpeername( "google.com", 54613 )
+	local testPeerIP = socketTest1:getsockname()
+	if (testPeerIP == "::") then
+		ipv6Test = false
+	end
+end
+
+local peerIP, peerPort 
+local s = socketUDP()
+s:setpeername( "google.com", 54613 )
+peerIP, peerPort = s:getsockname(), 54613
+
+if( peerIP == nil ) then
+	s:setpeername( fallBackAddress, 54613 )
+	peerIP, peerPort = s:getsockname(), 54613
+end
+s = nil
+
+print("BOODLES", peerIP, peerPort, socketUDP, socketTCP )
+
+
+
 local matchmakerTCPclient, pendingConnection
 
 local function send(input, priority, listener) --adds to send buffer and assigns priority
@@ -338,10 +387,10 @@ local function connectToServer()
 	end
 	if(HandshakeClient == nil) then
 		--print("creating handshake client")
-		HandshakeClient = socket.udp()
+		HandshakeClient = socketUDP()
 		HandshakeClient:setsockname("*", 0) --bind on any availible port and localserver ip address.
 		HandshakeClient:settimeout(0)
-		tempClient = socket.udp() --need a temp client b/c loop is still running
+		tempClient = socketUDP() --need a temp client b/c loop is still running
 		tempClient:setsockname("*", 0) --bind on any availible port and localserver ip address.
 		tempClient:settimeout(0)		
 		myIP, myPort = tempClient:getsockname()	
@@ -430,7 +479,7 @@ local function scanServers(scanTime)
 		----print("already scanning...")
 	else
 		if(broadcastListener==nil) then
-			broadcastListener = socket.udp()
+			broadcastListener = socketUDP()
 			broadcastListener:setsockname("*", 8080)
 			broadcastListener:settimeout(0)
 		end
@@ -450,7 +499,7 @@ local function connectToServerInternet()
 		timers.connectTimerInternet = timer.performWithDelay(listenTime,connectToServerInternet,-1)
 	end	
 	if(pendingConnection == nil) then
-		local udpclient = socket.udp()
+		local udpclient = socketUDP()
 		udpclient:setsockname("*", 0) --bind on any availible port and localserver ip address.
 		udpclient:settimeout(0)	
 		pendingConnection = udpclient
@@ -512,18 +561,7 @@ end
 function client:scanServersInternet(scanTime)
 	scanServers()
 	--open a TCP connection to the matchmaking server
-	local ipv6Test = true
-	local socketTest1 = socket.udp6()
-	socketTest1:setpeername( "scottrules44.duckdns.org", 54613 )
-	local testPeerIP = socketTest1:getsockname()
-	if (testPeerIP == "::") then
-		ipv6Test = false
-	end
-	if (ipv6Test == true) then
-		matchmakerTCPclient = socket.tcp6()
-	else
-		matchmakerTCPclient = socket.tcp4()
-	end
+	matchmakerTCPclient = socketTCP()
 	matchmakerTCPclient:settimeout(1) --this is the only blocking operation	
 	local err = matchmakerTCPclient:connect(peerIP, peerPort) --bind on any availible port and localserver ip address.
 	print(err)
@@ -535,6 +573,7 @@ function client:scanServersInternet(scanTime)
 	matchmakerTCPclient:settimeout(0)
 	timers.scanTimerInternet = timer.performWithDelay(listenTime,MatchmakerServerListen,-1)
 end
+
 
 -------------------------------------------INTERNET----------------------------------------------------
 
